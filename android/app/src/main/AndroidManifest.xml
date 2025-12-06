@@ -1,7 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="top.zaona.mibandtool">
+
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
-        android:label="mibandtool"
+        android:label="表盘自定义工具"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

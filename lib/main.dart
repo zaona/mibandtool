@@ -1,122 +1,231 @@
+import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import 'src/api/miband_api.dart';
+import 'src/models/watchface_resource.dart';
+import 'src/pages/resource_detail_page.dart';
+import 'src/pages/search_page.dart';
+import 'src/state/resource_store.dart';
+import 'src/widgets/device_type_selector.dart';
+import 'src/widgets/paginated_resource_list.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(const MiBandToolApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class MiBandToolApp extends StatelessWidget {
+  const MiBandToolApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-      ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+    const seed = Colors.deepPurple;
+    return DynamicColorBuilder(
+      builder: (lightDynamic, darkDynamic) {
+        final colorScheme = lightDynamic ?? ColorScheme.fromSeed(seedColor: seed);
+        final darkColorScheme = darkDynamic ??
+            ColorScheme.fromSeed(seedColor: seed, brightness: Brightness.dark);
+        return MaterialApp(
+          debugShowCheckedModeBanner: false,
+          title: '表盘自定义工具',
+          theme: ThemeData(
+            colorScheme: colorScheme,
+            useMaterial3: true,
+          ),
+          darkTheme: ThemeData(
+            colorScheme: darkColorScheme,
+            useMaterial3: true,
+          ),
+          themeMode: ThemeMode.system,
+          home: const AppShell(),
+        );
+      },
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+class AppShell extends StatefulWidget {
+  const AppShell({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<AppShell> createState() => _AppShellState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class _AppShellState extends State<AppShell> {
+  late final MiBandApi _api;
+  late final ValueNotifier<String> _deviceType;
+  late final PaginatedResourceStore _homeStore;
+  late final SearchStore _searchStore;
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+  @override
+  void initState() {
+    super.initState();
+    _api = MiBandApi();
+    _deviceType = ValueNotifier('o66');
+    _homeStore = PaginatedResourceStore(
+      (page) => _api.fetchHomeResources(
+        deviceType: _deviceType.value,
+        page: page,
+      ),
+    );
+    _searchStore = SearchStore(
+      (keyword, page) => _api.searchResources(
+        keyword: keyword,
+        deviceType: _deviceType.value,
+        page: page,
+      ),
+    );
+    _deviceType.addListener(_handleDeviceTypeChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _homeStore.refresh();
     });
   }
 
   @override
+  void dispose() {
+    _deviceType.removeListener(_handleDeviceTypeChanged);
+    _deviceType.dispose();
+    _homeStore.dispose();
+    _searchStore.dispose();
+    _api.dispose();
+    super.dispose();
+  }
+
+  void _handleDeviceTypeChanged() {
+    final type = _deviceType.value;
+    _homeStore.replaceLoader(
+      (page) => _api.fetchHomeResources(deviceType: type, page: page),
+    );
+    if (_searchStore.keyword.isNotEmpty) {
+      _searchStore.search(_searchStore.keyword);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
     return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ],
+      appBar: _buildAppBar(context),
+      body: SafeArea(
+        child: FeedTab(
+          store: _homeStore,
+          onResourceTap: _showResourceDetail,
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
+    );
+  }
+
+  AppBar _buildAppBar(BuildContext context) {
+    return AppBar(
+      title: const Text('表盘自定义工具'),
+      actions: [
+        IconButton(
+          tooltip: '搜索资源',
+          onPressed: _openSearchPage,
+          icon: const Icon(Icons.search),
+        ),
+      ],
+      bottom: PreferredSize(
+        preferredSize: const Size.fromHeight(48),
+        child: DeviceTabs(deviceType: _deviceType),
+      ),
+    );
+  }
+
+  Future<void> _openSearchPage() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => SearchPage(
+          store: _searchStore,
+          deviceType: _deviceType,
+          onResourceTap: _showResourceDetail,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showResourceDetail(WatchfaceResource resource) async {
+    if (!mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ResourceDetailPage(
+          resource: resource,
+          api: _api,
+          deviceType: _deviceType,
+          onDownloadTap: _handleDownload,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleDownload(WatchfaceResource resource) async {
+    final navigator = Navigator.of(context);
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+    try {
+      final link = await _api.fetchDownloadUrl(
+        resourceId: resource.id,
+        deviceType: _deviceType.value,
+      );
+      if (!navigator.mounted) return;
+      navigator.pop();
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            title: const Text('下载链接'),
+            content: SelectableText(link),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: link));
+                  Navigator.of(context).pop();
+                  scaffoldMessenger.showSnackBar(
+                    const SnackBar(content: Text('下载链接已复制')),
+                  );
+                },
+                child: const Text('复制'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('关闭'),
+              ),
+            ],
+          );
+        },
+      );
+    } catch (error) {
+      if (navigator.canPop()) {
+        navigator.pop();
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.toString())),
+      );
+    }
+  }
+
+}
+
+class FeedTab extends StatelessWidget {
+  const FeedTab({
+    super.key,
+    required this.store,
+    required this.onResourceTap,
+  });
+
+  final PaginatedResourceStore store;
+  final ValueChanged<WatchfaceResource> onResourceTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return PaginatedResourceList(
+      store: store,
+      onResourceTap: onResourceTap,
     );
   }
 }
