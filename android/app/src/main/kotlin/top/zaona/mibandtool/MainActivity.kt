@@ -1,4 +1,4 @@
-package com.example.mibandtool
+package top.zaona.mibandtool
 
 import io.flutter.embedding.android.FlutterActivity
 
