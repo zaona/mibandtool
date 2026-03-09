@@ -22,6 +22,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "表盘自定义工具"
+rootProject.name = "mibandtool"
 include(":app")
  

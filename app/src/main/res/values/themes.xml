@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.表盘自定义工具" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.Mibandtool" parent="android:Theme.Material.Light.NoActionBar" />
 </resources>
