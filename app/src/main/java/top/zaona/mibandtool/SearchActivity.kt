@@ -6,43 +6,43 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
 import androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState
+import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.pullrefresh.PullRefreshIndicator
 import androidx.compose.material.pullrefresh.pullRefresh
 import androidx.compose.material.pullrefresh.rememberPullRefreshState
-import androidx.compose.material.ExperimentalMaterialApi
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.ErrorOutline
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.Surface
+import androidx.compose.material3.SearchBar
+import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -53,23 +53,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.compositeOver
-import androidx.compose.ui.graphics.painter.ColorPainter
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Download
-import androidx.compose.material.icons.outlined.ErrorOutline
-import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.Storage
-import androidx.compose.material.icons.outlined.Visibility
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
-import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
 import top.zaona.mibandtool.data.ApiException
 import top.zaona.mibandtool.data.ApiProvider
@@ -77,31 +66,24 @@ import top.zaona.mibandtool.data.MiBandApi
 import top.zaona.mibandtool.data.WatchfaceResource
 import top.zaona.mibandtool.data.devicePresets
 import top.zaona.mibandtool.ui.theme.MibandtoolTheme
-import coil.request.ImageRequest
 
-const val EXTRA_DEVICE_TYPE = "extra_device_type"
-const val EXTRA_RESOURCE_JSON = "extra_resource_json"
-
-class MainActivity : ComponentActivity() {
+class SearchActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        val initialDeviceType = intent.getStringExtra(EXTRA_DEVICE_TYPE)
+            ?: devicePresets.first().value
         setContent {
             MibandtoolTheme {
-                val viewModel: HomeViewModel = viewModel()
-                val context = LocalContext.current
-                val launcher = rememberLauncherForActivityResult(viewModel)
-                HomeScreen(
+                val viewModel: SearchViewModel = viewModel(
+                    factory = SearchViewModelFactory(initialDeviceType),
+                )
+                SearchScreen(
                     viewModel = viewModel,
-                    onSearchTap = {
-                        launcher.launch(
-                            Intent(context, SearchActivity::class.java)
-                                .putExtra(EXTRA_DEVICE_TYPE, viewModel.deviceType)
-                        )
-                    },
+                    onBack = { finishWithResult(viewModel.deviceType) },
                     onResourceTap = { resource ->
-                        context.startActivity(
-                            Intent(context, DetailActivity::class.java)
+                        startActivity(
+                            Intent(this, DetailActivity::class.java)
                                 .putExtra(
                                     EXTRA_RESOURCE_JSON,
                                     ApiProvider.gson.toJson(resource)
@@ -113,24 +95,35 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-}
 
-@Composable
-private fun rememberLauncherForActivityResult(
-    viewModel: HomeViewModel,
-) = androidx.activity.compose.rememberLauncherForActivityResult(
-    ActivityResultContracts.StartActivityForResult()
-) { result ->
-    if (result.resultCode != Activity.RESULT_OK) return@rememberLauncherForActivityResult
-    result.data?.getStringExtra(EXTRA_DEVICE_TYPE)?.takeIf { it.isNotBlank() }?.let {
-        viewModel.updateDeviceType(it)
+    private fun finishWithResult(deviceType: String) {
+        setResult(
+            Activity.RESULT_OK,
+            Intent().putExtra(EXTRA_DEVICE_TYPE, deviceType),
+        )
+        finish()
     }
 }
 
-class HomeViewModel(
+class SearchViewModelFactory(
+    private val initialDeviceType: String,
+) : androidx.lifecycle.ViewModelProvider.Factory {
+    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+        if (modelClass.isAssignableFrom(SearchViewModel::class.java)) {
+            @Suppress("UNCHECKED_CAST")
+            return SearchViewModel(initialDeviceType) as T
+        }
+        throw IllegalArgumentException("Unknown ViewModel class")
+    }
+}
+
+class SearchViewModel(
+    initialDeviceType: String,
     private val api: MiBandApi = ApiProvider.api,
 ) : ViewModel() {
-    var deviceType by mutableStateOf(devicePresets.first().value)
+    var deviceType by mutableStateOf(initialDeviceType)
+        private set
+    var keyword by mutableStateOf("")
         private set
     var items by mutableStateOf<List<WatchfaceResource>>(emptyList())
         private set
@@ -145,27 +138,41 @@ class HomeViewModel(
 
     private var page = 1
 
-    init {
-        refresh(isUserInitiated = false)
-    }
-
     fun updateDeviceType(type: String) {
         if (type == deviceType) return
         deviceType = type
-        refresh(isUserInitiated = false)
+        if (keyword.isNotBlank()) {
+            search(keyword)
+        }
     }
 
-    fun refresh(isUserInitiated: Boolean) {
+    fun search(input: String) {
+        val normalized = input.trim()
+        keyword = normalized
+        if (normalized.isEmpty()) {
+            items = emptyList()
+            error = null
+            hasMore = true
+            page = 1
+            return
+        }
         page = 1
         hasMore = true
         items = emptyList()
-        error = null
+        fetchNext(isRefresh = false)
+    }
+
+    fun refresh(isUserInitiated: Boolean) {
+        if (keyword.isBlank()) return
+        page = 1
+        hasMore = true
+        items = emptyList()
         isRefreshing = isUserInitiated
         fetchNext(isRefresh = true)
     }
 
     fun loadMore() {
-        if (isLoading || !hasMore) return
+        if (isLoading || !hasMore || keyword.isBlank()) return
         fetchNext(isRefresh = false)
     }
 
@@ -174,7 +181,8 @@ class HomeViewModel(
         error = null
         viewModelScope.launch {
             try {
-                val result = api.fetchHomeResources(
+                val result = api.searchResources(
+                    keyword = keyword,
                     deviceType = deviceType,
                     page = page,
                 )
@@ -197,33 +205,71 @@ class HomeViewModel(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(
-    viewModel: HomeViewModel,
-    onSearchTap: () -> Unit,
+fun SearchScreen(
+    viewModel: SearchViewModel,
+    onBack: () -> Unit,
     onResourceTap: (WatchfaceResource) -> Unit,
 ) {
+    var query by remember { mutableStateOf(viewModel.keyword) }
+    val keyboardController = LocalSoftwareKeyboardController.current
+
     Scaffold(
         topBar = {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(MaterialTheme.colorScheme.surface)
+                    .statusBarsPadding()
             ) {
-                TopAppBar(
-                    title = { Text("表盘自定义工具") },
-                    actions = {
-                        IconButton(onClick = onSearchTap) {
-                            Icon(
-                                imageVector = Icons.Outlined.Search,
-                                contentDescription = "搜索资源",
-                            )
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                    ),
-                )
-                DeviceTabs(
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    shape = SearchBarDefaults.inputFieldShape,
+                    color = SearchBarDefaults.colors().containerColor,
+                    tonalElevation = 6.dp,
+                ) {
+                    SearchBarDefaults.InputField(
+                        query = query,
+                        onQueryChange = { query = it },
+                        onSearch = {
+                            keyboardController?.hide()
+                            viewModel.search(query)
+                        },
+                        expanded = false,
+                        onExpandedChange = {},
+                        placeholder = { Text("输入关键词（作者、资源名称等）") },
+                        leadingIcon = {
+                            IconButton(onClick = onBack) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                                    contentDescription = "返回",
+                                )
+                            }
+                        },
+                        trailingIcon = {
+                            if (query.isNotEmpty()) {
+                                IconButton(onClick = { query = "" }) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Close,
+                                        contentDescription = "清除",
+                                    )
+                                }
+                            } else {
+                                IconButton(onClick = {
+                                    keyboardController?.hide()
+                                    viewModel.search(query)
+                                }) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Search,
+                                        contentDescription = "搜索",
+                                    )
+                                }
+                            }
+                        },
+                    )
+                }
+                SearchDeviceTabs(
                     selectedValue = viewModel.deviceType,
                     onSelected = { value ->
                         viewModel.updateDeviceType(value)
@@ -232,7 +278,7 @@ fun HomeScreen(
             }
         }
     ) { padding ->
-        HomeResourceGrid(
+        SearchResults(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize(),
@@ -244,9 +290,9 @@ fun HomeScreen(
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterialApi::class)
 @Composable
-private fun HomeResourceGrid(
+private fun SearchResults(
     modifier: Modifier,
-    viewModel: HomeViewModel,
+    viewModel: SearchViewModel,
     onResourceTap: (WatchfaceResource) -> Unit,
 ) {
     val listState = rememberLazyStaggeredGridState()
@@ -270,6 +316,10 @@ private fun HomeResourceGrid(
 
     Box(modifier = modifier.pullRefresh(pullRefreshState)) {
         when {
+            viewModel.keyword.isEmpty() -> {
+                HintMessage(modifier = Modifier.fillMaxSize(), message = "输入关键词并点击搜索来查找资源")
+            }
+
             viewModel.isLoading && viewModel.items.isEmpty() -> {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     androidx.compose.material3.CircularProgressIndicator()
@@ -280,12 +330,12 @@ private fun HomeResourceGrid(
                 ErrorHint(
                     modifier = Modifier.fillMaxSize(),
                     message = viewModel.error ?: "加载失败",
-                    onRetry = { viewModel.refresh(isUserInitiated = false) },
+                    onRetry = { viewModel.search(viewModel.keyword) },
                 )
             }
 
             viewModel.items.isEmpty() -> {
-                HintMessage(modifier = Modifier.fillMaxSize(), message = "暂无相关资源")
+                HintMessage(modifier = Modifier.fillMaxSize(), message = "没有找到匹配的资源")
             }
 
             else -> {
@@ -313,16 +363,18 @@ private fun HomeResourceGrid(
             }
         }
 
-        PullRefreshIndicator(
-            refreshing = viewModel.isRefreshing,
-            state = pullRefreshState,
-            modifier = Modifier.align(Alignment.TopCenter),
-        )
+        if (viewModel.keyword.isNotEmpty()) {
+            PullRefreshIndicator(
+                refreshing = viewModel.isRefreshing,
+                state = pullRefreshState,
+                modifier = Modifier.align(Alignment.TopCenter),
+            )
+        }
     }
 }
 
 @Composable
-private fun DeviceTabs(
+private fun SearchDeviceTabs(
     selectedValue: String,
     onSelected: (String) -> Unit,
 ) {
@@ -338,132 +390,6 @@ private fun DeviceTabs(
                 text = { Text(preset.label) },
             )
         }
-    }
-}
-
-@Composable
-fun WatchfaceCard(
-    resource: WatchfaceResource,
-    onClick: () -> Unit,
-) {
-    val colorScheme = MaterialTheme.colorScheme
-    val overlay = if (!isSystemInDarkTheme()) {
-        Color.Black.copy(alpha = 0.04f)
-    } else {
-        Color.White.copy(alpha = 0.08f)
-    }
-    val cardColor = overlay.compositeOver(colorScheme.surface)
-    Card(
-        onClick = onClick,
-        colors = CardDefaults.cardColors(containerColor = cardColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        shape = MaterialTheme.shapes.medium,
-    ) {
-        Column {
-            val context = LocalContext.current
-            AsyncImage(
-                model = ImageRequest.Builder(context)
-                    .data(resource.previewUrl)
-                    .crossfade(true)
-                    .size(600)
-                    .build(),
-                contentDescription = resource.name,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(140.dp)
-                    .background(colorScheme.surfaceVariant),
-                contentScale = ContentScale.Crop,
-                placeholder = ColorPainter(colorScheme.surfaceVariant),
-                error = ColorPainter(colorScheme.surfaceVariant),
-            )
-            Column(
-                modifier = Modifier.padding(12.dp)
-            ) {
-                Text(
-                    text = resource.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                MetaLine(
-                    icon = Icons.Outlined.Download,
-                    label = "下载 ${resource.downloads}",
-                )
-                MetaLine(
-                    icon = Icons.Outlined.Visibility,
-                    label = "浏览 ${resource.views}",
-                )
-                MetaLine(
-                    icon = Icons.Outlined.Storage,
-                    label = "体积 ${resource.fileSizeKb} KB",
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun MetaLine(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-) {
-    val theme = MaterialTheme
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.padding(vertical = 2.dp),
-    ) {
-        Icon(
-            icon,
-            contentDescription = null,
-            tint = theme.colorScheme.primary,
-            modifier = Modifier.size(16.dp),
-        )
-        Spacer(modifier = Modifier.width(6.dp))
-        Text(
-            text = label,
-            style = theme.typography.bodySmall,
-            color = theme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
-}
-
-@Composable
-fun LoaderFooter(
-    isLoading: Boolean,
-    hasMore: Boolean,
-    error: String?,
-    onRetry: () -> Unit,
-) {
-    when {
-        error != null -> {
-            ErrorHint(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 16.dp),
-                message = error,
-                onRetry = onRetry,
-            )
-        }
-
-        !hasMore -> {
-            Spacer(modifier = Modifier.height(16.dp))
-        }
-
-        isLoading -> {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 24.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                androidx.compose.material3.CircularProgressIndicator()
-            }
-        }
-
-        else -> Spacer(modifier = Modifier.height(24.dp))
     }
 }
 

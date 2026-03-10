@@ -13,6 +13,8 @@
 .externalNativeBuild
 .cxx
 local.properties
+key.properties
+*.jks
 
 old/
 miuix-docs/
