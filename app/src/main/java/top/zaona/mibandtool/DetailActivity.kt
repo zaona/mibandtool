@@ -464,9 +464,6 @@ fun DetailScreen(
                 DetailDescription(resource = viewModel.resource)
             }
             item {
-                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-            }
-            item {
                 CommentsSection(
                     comments = viewModel.comments,
                     isLoading = viewModel.isLoading,
