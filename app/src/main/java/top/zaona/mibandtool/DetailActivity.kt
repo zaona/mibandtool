@@ -1,10 +1,14 @@
 package top.zaona.mibandtool
 
+import android.app.Activity
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.core.view.WindowCompat
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,6 +27,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -38,6 +43,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -45,16 +51,21 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.painter.ColorPainter
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -83,6 +94,7 @@ import top.zaona.mibandtool.data.WatchfaceResource
 import top.zaona.mibandtool.ui.theme.MibandtoolTheme
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.math.min
 
 class DetailActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -124,7 +136,7 @@ class DetailViewModelFactory(
 
 class DetailViewModel(
     val resource: WatchfaceResource,
-    private val deviceType: String,
+    val deviceType: String,
     private val api: MiBandApi = ApiProvider.api,
 ) : ViewModel() {
     private val pageSize = 10
@@ -244,6 +256,87 @@ sealed class DownloadState {
     data class Error(val message: String) : DownloadState()
 }
 
+private sealed interface DeviceCornerStyle {
+    fun toShape(scale: Float): Shape
+}
+
+private data class PercentCornerStyle(val percent: Int) : DeviceCornerStyle {
+    override fun toShape(scale: Float): Shape = RoundedCornerShape(percent = percent)
+}
+
+private data class AbsoluteCornerStyle(val radiusDp: Float) : DeviceCornerStyle {
+    override fun toShape(scale: Float): Shape = RoundedCornerShape((radiusDp * scale).dp)
+}
+
+private data class DevicePreviewSpec(
+    val widthPx: Int,
+    val heightPx: Int,
+    val cornerStyle: DeviceCornerStyle,
+)
+
+private val devicePreviewSpecs = mapOf(
+    "o66" to DevicePreviewSpec(
+        widthPx = 212,
+        heightPx = 520,
+        cornerStyle = PercentCornerStyle(50),
+    ),
+    "n66" to DevicePreviewSpec(
+        widthPx = 192,
+        heightPx = 490,
+        cornerStyle = PercentCornerStyle(50),
+    ),
+    "n67" to DevicePreviewSpec(
+        widthPx = 336,
+        heightPx = 480,
+        cornerStyle = AbsoluteCornerStyle(48f),
+    ),
+    "mi8" to DevicePreviewSpec(
+        widthPx = 192,
+        heightPx = 490,
+        cornerStyle = PercentCornerStyle(50),
+    ),
+    "mi8pro" to DevicePreviewSpec(
+        widthPx = 192,
+        heightPx = 490,
+        cornerStyle = AbsoluteCornerStyle(48f),
+    ),
+    "mi7" to DevicePreviewSpec(
+        widthPx = 192,
+        heightPx = 490,
+        cornerStyle = PercentCornerStyle(50),
+    ),
+    "mi7pro" to DevicePreviewSpec(
+        widthPx = 280,
+        heightPx = 456,
+        cornerStyle = AbsoluteCornerStyle(48f),
+    ),
+    "ws3" to DevicePreviewSpec(
+        widthPx = 466,
+        heightPx = 466,
+        cornerStyle = PercentCornerStyle(50),
+    ),
+    "o62" to DevicePreviewSpec(
+        widthPx = 466,
+        heightPx = 466,
+        cornerStyle = PercentCornerStyle(50),
+    ),
+    "rw4" to DevicePreviewSpec(
+        widthPx = 390,
+        heightPx = 450,
+        cornerStyle = AbsoluteCornerStyle(103f),
+    ),
+    "o65" to DevicePreviewSpec(
+        widthPx = 432,
+        heightPx = 514,
+        cornerStyle = AbsoluteCornerStyle(103f),
+    ),
+    "p65" to DevicePreviewSpec(
+        widthPx = 432,
+        heightPx = 514,
+        cornerStyle = AbsoluteCornerStyle(108f),
+    ),
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DetailScreen(
@@ -258,6 +351,22 @@ fun DetailScreen(
     }
     @Suppress("DEPRECATION")
     val clipboard = LocalClipboardManager.current
+    val view = LocalView.current
+    val statusBarColor = if (isCollapsed) {
+        MaterialTheme.colorScheme.surface
+    } else {
+        Color.Transparent
+    }
+    val useDarkStatusBarIcons = isCollapsed && statusBarColor.luminance() > 0.5f
+
+    if (!view.isInEditMode) {
+        SideEffect {
+            val window = (view.context as? Activity)?.window ?: return@SideEffect
+            @Suppress("DEPRECATION")
+            window.statusBarColor = statusBarColor.toArgb()
+            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = useDarkStatusBarIcons
+        }
+    }
 
     if (viewModel.downloadState !is DownloadState.Idle) {
         DownloadDialog(
@@ -333,6 +442,9 @@ fun DetailScreen(
             end = padding.calculateEndPadding(layoutDirection),
             bottom = padding.calculateBottomPadding(),
         )
+        val previewDeviceType = viewModel.resource.deviceType
+            .takeIf { it.isNotBlank() }
+            ?: viewModel.deviceType
         LazyColumn(
             state = listState,
             modifier = Modifier
@@ -340,7 +452,10 @@ fun DetailScreen(
                 .padding(contentPadding),
         ) {
             item {
-                DetailHero(resource = viewModel.resource)
+                DetailHero(
+                    resource = viewModel.resource,
+                    deviceType = previewDeviceType,
+                )
             }
             item {
                 DetailMetaCard(resource = viewModel.resource)
@@ -369,12 +484,42 @@ fun DetailScreen(
 }
 
 @Composable
-private fun DetailHero(resource: WatchfaceResource) {
+private fun DetailHero(
+    resource: WatchfaceResource,
+    deviceType: String,
+) {
     val context = LocalContext.current
+    val configuration = LocalConfiguration.current
+    val screenWidth = configuration.screenWidthDp.dp
+    val screenHeight = configuration.screenHeightDp.dp
+    val maxPreviewWidth = (screenWidth - 32.dp).coerceAtLeast(120.dp)
+    val maxPreviewHeight = (screenHeight * 0.6f).coerceAtLeast(200.dp)
+    val effectiveType = resource.deviceType.takeIf { it.isNotBlank() } ?: deviceType
+    val previewSpec = effectiveType
+        .takeIf { it.isNotBlank() }
+        ?.lowercase(Locale.ROOT)
+        ?.let(devicePreviewSpecs::get)
+    val previewScale = previewSpec?.let {
+        val widthScale = maxPreviewWidth.value / it.widthPx.toFloat()
+        val heightScale = maxPreviewHeight.value / it.heightPx.toFloat()
+        min(1f, min(widthScale, heightScale))
+    } ?: 1f
+    val previewHeight = previewSpec?.let { it.heightPx.dp * previewScale } ?: 0.dp
+    val topPadding = if (previewSpec != null) 120.dp else 0.dp
+    val bottomPadding = if (previewSpec != null) 140.dp else 0.dp
+    val desiredHeroHeight = if (previewSpec != null) {
+        previewHeight + topPadding + bottomPadding
+    } else {
+        320.dp
+    }
+    val maxHeroHeight = (screenHeight * 0.85f).coerceAtLeast(320.dp)
+    val heroHeight = desiredHeroHeight
+        .coerceAtLeast(320.dp)
+        .coerceAtMost(maxHeroHeight)
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(320.dp),
+            .height(heroHeight),
     ) {
         AsyncImage(
             model = ImageRequest.Builder(context)
@@ -383,20 +528,71 @@ private fun DetailHero(resource: WatchfaceResource) {
                 .size(1200)
                 .build(),
             contentDescription = resource.name,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .blur(28.dp),
             contentScale = ContentScale.Crop,
             placeholder = ColorPainter(MaterialTheme.colorScheme.surfaceVariant),
             error = ColorPainter(MaterialTheme.colorScheme.surfaceVariant),
         )
         Box(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
+                .height(220.dp)
+                .align(Alignment.TopCenter)
                 .background(
                     Brush.verticalGradient(
-                        colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f)),
+                        colors = listOf(
+                            Color.Black.copy(alpha = 0.55f),
+                            Color.Transparent,
+                        ),
                     )
                 )
         )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(if (previewSpec != null) bottomPadding else 200.dp)
+                .align(Alignment.BottomCenter)
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            Color.Black.copy(alpha = 0.7f),
+                        ),
+                    )
+                )
+        )
+        if (previewSpec != null) {
+            val previewShape = previewSpec.cornerStyle.toShape(previewScale)
+            val previewWidth = previewSpec.widthPx.dp * previewScale
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = topPadding)
+                    .width(previewWidth)
+                    .height(previewHeight)
+                    .border(
+                        BorderStroke(3.dp, Color.White.copy(alpha = 0.5f)),
+                        previewShape,
+                    )
+                    .clip(previewShape)
+                    .background(MaterialTheme.colorScheme.surface, previewShape),
+            ) {
+                AsyncImage(
+                    model = ImageRequest.Builder(context)
+                    .data(resource.previewUrl)
+                    .crossfade(true)
+                        .size(previewSpec.widthPx, previewSpec.heightPx)
+                        .build(),
+                    contentDescription = resource.name,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.FillBounds,
+                    placeholder = ColorPainter(MaterialTheme.colorScheme.surfaceVariant),
+                    error = ColorPainter(MaterialTheme.colorScheme.surfaceVariant),
+                )
+            }
+        }
         Text(
             text = resource.name,
             style = MaterialTheme.typography.headlineSmall,
