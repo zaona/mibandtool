@@ -1,7 +1,6 @@
 package top.zaona.mibandtool
 
 import android.app.Activity
-import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -20,15 +19,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
@@ -40,29 +34,22 @@ import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -99,7 +86,6 @@ import kotlin.math.roundToInt
 
 const val EXTRA_DEVICE_TYPE = "extra_device_type"
 const val EXTRA_RESOURCE_JSON = "extra_resource_json"
-private const val DEFAULT_VISIBLE_DEVICE_COUNT = 6
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -221,61 +207,6 @@ fun HomeScreen(
     onSearchTap: () -> Unit,
     onResourceTap: (WatchfaceResource) -> Unit,
 ) {
-    val context = LocalContext.current
-    val visibilityStore = remember(context) { DeviceVisibilityStore(context) }
-    val visibleDevices = remember {
-        mutableStateListOf<String>().apply {
-            val saved = visibilityStore.load().filter { value ->
-                devicePresets.any { it.value == value }
-            }
-            if (saved.isNotEmpty()) {
-                addAll(saved)
-            } else {
-                addAll(devicePresets.take(DEFAULT_VISIBLE_DEVICE_COUNT).map { it.value })
-            }
-        }
-    }
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var isSheetOpen by rememberSaveable { mutableStateOf(false) }
-
-    LaunchedEffect(viewModel.deviceType) {
-        if (viewModel.deviceType !in visibleDevices) {
-            visibleDevices.add(0, viewModel.deviceType)
-        }
-    }
-
-    if (isSheetOpen) {
-        ModalBottomSheet(
-            onDismissRequest = { isSheetOpen = false },
-            sheetState = sheetState,
-        ) {
-            DeviceChipEditor(
-                visibleValues = visibleDevices,
-                onToggle = { value, shouldShow ->
-                    if (shouldShow) {
-                        if (value !in visibleDevices) {
-                            visibleDevices.add(value)
-                        }
-                    } else if (visibleDevices.size > 1) {
-                        visibleDevices.remove(value)
-                    }
-                },
-                onReset = {
-                    visibleDevices.clear()
-                    visibleDevices.addAll(devicePresets.take(DEFAULT_VISIBLE_DEVICE_COUNT).map { it.value })
-                },
-                onClose = { isSheetOpen = false },
-            )
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        snapshotFlow { visibleDevices.toList() }
-            .collect { values ->
-                visibilityStore.save(values)
-            }
-    }
-
     Scaffold(
         topBar = {
             Column(
@@ -299,9 +230,7 @@ fun HomeScreen(
                 )
                 DeviceFilterSection(
                     selectedValue = viewModel.deviceType,
-                    visibleDeviceValues = visibleDevices,
                     onSelected = { value -> viewModel.updateDeviceType(value) },
-                    onEditClick = { isSheetOpen = true },
                 )
             }
         }
@@ -398,106 +327,19 @@ private fun HomeResourceGrid(
 @Composable
 private fun DeviceFilterSection(
     selectedValue: String,
-    visibleDeviceValues: List<String>,
     onSelected: (String) -> Unit,
-    onEditClick: () -> Unit,
 ) {
-    val chipListState = rememberLazyListState()
-    val displayedPresets = devicePresets.filter { visibleDeviceValues.contains(it.value) }
-        .ifEmpty { devicePresets }
-    LaunchedEffect(selectedValue, displayedPresets) {
-        val index = displayedPresets.indexOfFirst { it.value == selectedValue }
-        if (index >= 0) {
-            chipListState.animateScrollToItem(index + 1)
-        }
-    }
-
-    LazyRow(
-        state = chipListState,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 1.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 1.dp),
+    val selectedIndex = devicePresets.indexOfFirst { it.value == selectedValue }.coerceAtLeast(0)
+    ScrollableTabRow(
+        selectedTabIndex = selectedIndex,
+        edgePadding = 12.dp,
     ) {
-        item {
-            FilterChip(
-                selected = false,
-                onClick = onEditClick,
-                label = { Text("管理") },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Outlined.Tune,
-                        contentDescription = null,
-                    )
-                },
-            )
-        }
-        items(displayedPresets, key = { it.value }) { preset ->
-            val isSelected = preset.value == selectedValue
-            FilterChip(
-                selected = isSelected,
+        devicePresets.forEachIndexed { index, preset ->
+            Tab(
+                selected = index == selectedIndex,
                 onClick = { onSelected(preset.value) },
-                label = { Text(preset.label) },
-                leadingIcon = if (isSelected) {
-                    {
-                        Icon(
-                            imageVector = Icons.Outlined.Check,
-                            contentDescription = null,
-                        )
-                    }
-                } else null,
+                text = { Text(preset.label) },
             )
-        }
-    }
-}
-
-@Composable
-private fun DeviceChipEditor(
-    visibleValues: List<String>,
-    onToggle: (String, Boolean) -> Unit,
-    onReset: () -> Unit,
-    onClose: () -> Unit,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(max = 420.dp)
-            .padding(horizontal = 24.dp)
-            .padding(top = 4.dp, bottom = 16.dp),
-    ) {
-        LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            items(devicePresets) { preset ->
-                val isChecked = visibleValues.contains(preset.value)
-                ListItem(
-                    headlineContent = { Text(preset.label) },
-                    supportingContent = { Text(preset.value.uppercase()) },
-                    trailingContent = {
-                        Checkbox(
-                            checked = isChecked,
-                            onCheckedChange = { checked ->
-                                if (!checked && visibleValues.size <= 1) return@Checkbox
-                                onToggle(preset.value, checked)
-                            },
-                        )
-                    },
-                )
-            }
-        }
-        Spacer(modifier = Modifier.height(12.dp))
-        Row(
-            horizontalArrangement = Arrangement.End,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            TextButton(onClick = onReset) {
-                Text("重置")
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            Button(onClick = onClose) {
-                Text("完成")
-            }
         }
     }
 }
@@ -588,21 +430,6 @@ private fun MetaLine(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-    }
-}
-
-private class DeviceVisibilityStore(context: Context) {
-    private val prefs = context.getSharedPreferences("visible_devices", Context.MODE_PRIVATE)
-
-    fun load(): List<String> {
-        val csv = prefs.getString("values", null)?.takeIf { it.isNotBlank() } ?: return emptyList()
-        return csv.split(",").mapNotNull { value ->
-            value.trim().takeIf { it.isNotEmpty() }
-        }
-    }
-
-    fun save(values: List<String>) {
-        prefs.edit().putString("values", values.joinToString(",")).apply()
     }
 }
 
