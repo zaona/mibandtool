@@ -97,6 +97,7 @@ val devicePresets = listOf(
     DevicePreset("小米手环7Pro", "mi7pro"),
     DevicePreset("小米手表S3/S4Sport", "ws3"),
     DevicePreset("小米手表S4", "o62"),
+    DevicePreset("小米手表S5", "p62"),
     DevicePreset("红米手表4", "rw4"),
     DevicePreset("红米手表5", "o65"),
     DevicePreset("红米手表6", "p65"),

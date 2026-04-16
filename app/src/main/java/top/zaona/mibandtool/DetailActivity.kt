@@ -296,8 +296,8 @@ private val devicePreviewSpecs = mapOf(
         cornerStyle = PercentCornerStyle(50),
     ),
     "mi8pro" to DevicePreviewSpec(
-        widthPx = 192,
-        heightPx = 490,
+        widthPx = 336,
+        heightPx = 480,
         cornerStyle = AbsoluteCornerStyle(48f),
     ),
     "mi7" to DevicePreviewSpec(
@@ -318,6 +318,11 @@ private val devicePreviewSpecs = mapOf(
     "o62" to DevicePreviewSpec(
         widthPx = 466,
         heightPx = 466,
+        cornerStyle = PercentCornerStyle(50),
+    ),
+    "p62" to DevicePreviewSpec(
+        widthPx = 480,
+        heightPx = 480,
         cornerStyle = PercentCornerStyle(50),
     ),
     "rw4" to DevicePreviewSpec(
