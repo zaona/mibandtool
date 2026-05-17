@@ -280,6 +280,11 @@ private val devicePreviewSpecs = mapOf(
         heightPx = 520,
         cornerStyle = PercentCornerStyle(50),
     ),
+    "p67" to DevicePreviewSpec(
+        widthPx = 336,
+        heightPx = 480,
+        cornerStyle = AbsoluteCornerStyle(48f),
+    ),
     "n66" to DevicePreviewSpec(
         widthPx = 192,
         heightPx = 490,
