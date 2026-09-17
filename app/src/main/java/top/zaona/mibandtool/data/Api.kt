@@ -59,27 +59,6 @@ class MiBandApi(
         return parseResourceList(json)
     }
 
-    suspend fun fetchDownloadUrl(
-        resourceId: Int,
-        deviceType: String,
-    ): String {
-        val url = baseUrl.newBuilder()
-            .addPathSegments("watchface/downloadUsr")
-            .addQueryParameter("id", resourceId.toString())
-            .build()
-        val request = Request.Builder()
-            .url(url)
-            .post("".toRequestBody())
-            .addHeader("type", deviceType)
-            .build()
-        val json = execute(request)
-        val data = json["data"]?.takeIf { it.isJsonPrimitive }?.asString
-        if (data.isNullOrBlank()) {
-            throw ApiException("未能获取下载链接，请稍后再试")
-        }
-        return data!!
-    }
-
     suspend fun fetchComments(
         resourceId: Int,
         deviceType: String,

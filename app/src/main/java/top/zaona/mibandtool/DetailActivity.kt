@@ -28,7 +28,6 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -61,12 +60,10 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
@@ -74,7 +71,6 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.ExpandMore
-import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Reviews
 import androidx.compose.material.icons.outlined.Storage
@@ -147,8 +143,6 @@ class DetailViewModel(
     var error by mutableStateOf<String?>(null)
         private set
     var hasMore by mutableStateOf(true)
-        private set
-    var downloadState by mutableStateOf<DownloadState>(DownloadState.Idle)
         private set
 
     private var page = 1
@@ -226,34 +220,6 @@ class DetailViewModel(
             }
         }
     }
-
-    fun requestDownload() {
-        if (downloadState is DownloadState.Loading) return
-        downloadState = DownloadState.Loading
-        viewModelScope.launch {
-            try {
-                val url = api.fetchDownloadUrl(
-                    resourceId = resource.id,
-                    deviceType = deviceType,
-                )
-                downloadState = DownloadState.Success(url)
-            } catch (exception: Exception) {
-                val message = if (exception is ApiException) exception.message else exception.message
-                downloadState = DownloadState.Error(message ?: "下载失败")
-            }
-        }
-    }
-
-    fun clearDownloadState() {
-        downloadState = DownloadState.Idle
-    }
-}
-
-sealed class DownloadState {
-    object Idle : DownloadState()
-    object Loading : DownloadState()
-    data class Success(val url: String) : DownloadState()
-    data class Error(val message: String) : DownloadState()
 }
 
 private sealed interface DeviceCornerStyle {
@@ -364,8 +330,6 @@ fun DetailScreen(
             listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 240
         }
     }
-    @Suppress("DEPRECATION")
-    val clipboard = LocalClipboardManager.current
     val view = LocalView.current
     val statusBarColor = if (isCollapsed) {
         MaterialTheme.colorScheme.surface
@@ -381,18 +345,6 @@ fun DetailScreen(
             window.statusBarColor = statusBarColor.toArgb()
             WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = useDarkStatusBarIcons
         }
-    }
-
-    if (viewModel.downloadState !is DownloadState.Idle) {
-        DownloadDialog(
-            state = viewModel.downloadState,
-            onCopy = { url ->
-                clipboard.setText(AnnotatedString(url))
-                viewModel.clearDownloadState()
-            },
-            onDismiss = viewModel::clearDownloadState,
-            onRetry = viewModel::requestDownload,
-        )
     }
 
     Scaffold(
@@ -415,14 +367,6 @@ fun DetailScreen(
                             )
                         }
                     },
-                actions = {
-                    IconButton(onClick = viewModel::requestDownload) {
-                        Icon(
-                            imageVector = Icons.Outlined.FileDownload,
-                            contentDescription = "获取下载链接",
-                        )
-                    }
-                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = if (isCollapsed) {
                         MaterialTheme.colorScheme.surface
@@ -922,58 +866,4 @@ private fun CommentTile(comment: Comment) {
             )
         }
     }
-}
-
-@Composable
-private fun DownloadDialog(
-    state: DownloadState,
-    onCopy: (String) -> Unit,
-    onDismiss: () -> Unit,
-    onRetry: () -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("下载链接") },
-        text = {
-            when (state) {
-                is DownloadState.Loading -> {
-                    Text("正在获取下载链接...")
-                }
-
-                is DownloadState.Success -> {
-                    Text(state.url)
-                }
-
-                is DownloadState.Error -> {
-                    Text(state.message)
-                }
-
-                DownloadState.Idle -> {
-                    Text("")
-                }
-            }
-        },
-        confirmButton = {
-            when (state) {
-                is DownloadState.Success -> {
-                    TextButton(onClick = { onCopy(state.url) }) {
-                        Text("复制")
-                    }
-                }
-
-                is DownloadState.Error -> {
-                    TextButton(onClick = onRetry) {
-                        Text("重试")
-                    }
-                }
-
-                else -> {}
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("关闭")
-            }
-        },
-    )
 }
