@@ -275,6 +275,11 @@ private data class DevicePreviewSpec(
 )
 
 private val devicePreviewSpecs = mapOf(
+    "q66" to DevicePreviewSpec(
+        widthPx = 212,
+        heightPx = 520,
+        cornerStyle = PercentCornerStyle(50),
+    ),
     "o66" to DevicePreviewSpec(
         widthPx = 212,
         heightPx = 520,

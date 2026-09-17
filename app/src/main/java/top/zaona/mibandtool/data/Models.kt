@@ -88,6 +88,7 @@ data class DevicePreset(
 )
 
 val devicePresets = listOf(
+    DevicePreset("小米手环11", "q66"),
     DevicePreset("小米手环10", "o66"),
     DevicePreset("小米手环10Pro", "p67"),
     DevicePreset("小米手环9", "n66"),
